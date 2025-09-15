@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AgriSage - AI Farming Doctor</title>
+    <link rel="stylesheet" href="/static/css/style.css">
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;600;700&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>🌱 AgriSage</h1>
+            <p>Your AI-Powered Farming Assistant</p>
+        </header>
+
+        <main>
+            <div class="upload-section">
+                <h2>Upload Crop Image for Disease Detection</h2>
+                
+                <div class="language-selector">
+                    <label>Select Language:</label>
+                    <select id="language">
+                        <option value="en">English</option>
+                        <option value="te">తెలుగు (Telugu)</option>
+                    </select>
+                </div>
+
+                <div class="upload-area" id="uploadArea">
+                    <svg class="upload-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                        <polyline points="17 8 12 3 7 8"></polyline>
+                        <line x1="12" y1="3" x2="12" y2="15"></line>
+                    </svg>
+                    <p>Click to upload or drag and drop</p>
+                    <p class="file-info">Supports: JPG, PNG, GIF (Max 16MB)</p>
+                    <input type="file" id="fileInput" accept="image/*" hidden>
+                </div>
+
+                <div id="preview" class="preview-container" style="display: none;">
+                    <img id="previewImage" alt="Preview">
+                    <button id="removeImage" class="btn-remove">Remove</button>
+                </div>
+
+                <button id="analyzeBtn" class="btn-primary" disabled>
+                    <span>Analyze Crop</span>
+                </button>
+            </div>
+
+            <div id="results" class="results-section" style="display: none;">
+                <h2>Analysis Results</h2>
+                
+                <div class="result-card">
+                    <h3>Disease Detected</h3>
+                    <p id="diseaseName" class="disease-name"></p>
+                    <div class="confidence-bar">
+                        <div class="confidence-fill" id="confidenceBar"></div>
+                    </div>
+                    <p class="confidence-text">Confidence: <span id="confidenceValue"></span>%</p>
+                </div>
+
+                <div class="treatment-section">
+                    <h3>Treatment Recommendations</h3>
+                    
+                    <div class="treatment-card organic">
+                        <h4>🌿 Organic Treatment</h4>
+                        <p id="organicTreatment"></p>
+                    </div>
+
+                    <div class="treatment-card chemical">
+                        <h4>⚗️ Chemical Treatment</h4>
+                        <p id="chemicalTreatment"></p>
+                    </div>
+
+                    <div class="treatment-card prevention">
+                        <h4>🛡️ Prevention Methods</h4>
+                        <p id="preventionMethods"></p>
+                    </div>
+                </div>
+
+                <div class="action-buttons">
+                    <button id="speakBtn" class="btn-secondary">
+                        🔊 Read Aloud
+                    </button>
+                    <button id="downloadBtn" class="btn-secondary">
+                        📄 Download Report
+                    </button>
+                    <button id="newAnalysisBtn" class="btn-primary">
+                        New Analysis
+                    </button>
+                </div>
+            </div>
+
+            <div id="loading" class="loading" style="display: none;">
+                <div class="spinner"></div>
+                <p>Analyzing your crop image...</p>
+            </div>
+        </main>
+
+        <footer>
+            <p>© 2024 AgriSage - Empowering Farmers with AI</p>
+        </footer>
+    </div>
+
+    <audio id="audioPlayer" style="display: none;"></audio>
+    <script src="/static/js/main.js"></script>
+</body>
+</html>
