@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>AgriSage - AI Farming Doctor</title>
     <link rel="stylesheet" href="/static/css/style.css">
+    <link rel="icon" href="data:,">
     <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;600;700&display=swap" rel="stylesheet">
 </head>
 <body>
@@ -104,5 +105,9 @@
 
     <audio id="audioPlayer" style="display: none;"></audio>
     <script src="/static/js/main.js"></script>
+    <!-- Add before </body> -->
+{% include 'chat_widget.html' %}
+<link rel="stylesheet" href="/static/css/chat.css">
+<script src="/static/js/chat.js"></script>
 </body>
 </html>

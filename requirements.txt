@@ -1,5 +1,4 @@
 Flask
-tensorflow
 Pillow
 opencv-python-headless
 redis
@@ -10,3 +9,6 @@ reportlab
 numpy
 gunicorn
 requests
+transformers
+torch
+huggingface-hub

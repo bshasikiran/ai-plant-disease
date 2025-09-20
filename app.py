@@ -9,7 +9,8 @@ from utils.disease_detector import DiseaseDetector
 from utils.redis_handler import RedisHandler
 from utils.translator import Translator
 from utils.pdf_generator import PDFGenerator
-from gtts import gTTS # pyright: ignore[reportMissingImports]
+from utils.chatbot import AgriSageChatbot  # Add this import
+from gtts import gTTS
 import tempfile
 
 # Load environment variables
@@ -27,11 +28,12 @@ app.config['UPLOAD_FOLDER'] = 'uploads'
 os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
 os.makedirs('static/audio', exist_ok=True)
 
-# Initialize components
+# Initialize components IN THE CORRECT ORDER
 disease_detector = DiseaseDetector()
-redis_handler = RedisHandler()
+redis_handler = RedisHandler()  # Initialize this FIRST
 translator = Translator()
 pdf_generator = PDFGenerator()
+chatbot = AgriSageChatbot(redis_handler)  # Initialize chatbot AFTER redis_handler
 
 # Allowed file extensions
 ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif', 'bmp'}
@@ -99,6 +101,38 @@ def analyze_image():
         logger.error(f"Error in analyze_image: {str(e)}")
         return jsonify({'error': str(e)}), 500
 
+@app.route('/chat', methods=['POST'])
+def chat():
+    try:
+        session_id = request.form.get('session_id', 'default')
+        message = request.form.get('message', '')
+        language = request.form.get('language', 'en')
+        
+        image_data = None
+        if 'image' in request.files:
+            file = request.files['image']
+            if file and allowed_file(file.filename):
+                # Convert image to base64 for processing
+                image_bytes = file.read()
+                image_data = f"data:image/jpeg;base64,{base64.b64encode(image_bytes).decode()}"
+        
+        # Process message with chatbot
+        response = chatbot.process_message(
+            session_id=session_id,
+            message=message,
+            image_data=image_data,
+            language=language
+        )
+        
+        return jsonify(response), 200
+        
+    except Exception as e:
+        logger.error(f"Error in chat endpoint: {str(e)}")
+        return jsonify({
+            'response': 'Sorry, I encountered an error. Please try again.',
+            'error': str(e)
+        }), 500
+
 @app.route('/generate_audio', methods=['POST'])
 def generate_audio():
     try:
@@ -149,4 +183,4 @@ def health():
 
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))
-    app.run(host='0.0.0.0', port=port, debug=False)
+    app.run(host='0.0.0.0', port=port, debug=True)  # Set debug=False for production
