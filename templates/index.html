@@ -11,13 +11,19 @@
 <body>
     <div class="container">
         <header>
-            <h1>🌱 AgriSage</h1>
-            <p>Your AI-Powered Farming Assistant</p>
+            <div class="header-content">
+                <h1 class="animated-title">🌱 AgriSage</h1>
+                <p class="subtitle">Your AI-Powered Farming Assistant</p>
+                <div class="header-decoration"></div>
+            </div>
         </header>
 
         <main>
             <div class="upload-section">
-                <h2>Upload Crop Image for Disease Detection</h2>
+                <h2 class="section-title">
+                    <span class="title-icon">🔍</span>
+                    Upload Crop Image for Disease Detection
+                </h2>
                 
                 <div class="language-selector">
                     <label>Select Language:</label>
@@ -28,86 +34,119 @@
                 </div>
 
                 <div class="upload-area" id="uploadArea">
-                    <svg class="upload-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor">
-                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
-                        <polyline points="17 8 12 3 7 8"></polyline>
-                        <line x1="12" y1="3" x2="12" y2="15"></line>
-                    </svg>
-                    <p>Click to upload or drag and drop</p>
-                    <p class="file-info">Supports: JPG, PNG, GIF (Max 16MB)</p>
+                    <div class="upload-content">
+                        <svg class="upload-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                            <polyline points="17 8 12 3 7 8"></polyline>
+                            <line x1="12" y1="3" x2="12" y2="15"></line>
+                        </svg>
+                        <p class="upload-text">Click to upload or drag and drop</p>
+                        <p class="file-info">Supports: JPG, PNG, GIF (Max 16MB)</p>
+                    </div>
                     <input type="file" id="fileInput" accept="image/*" hidden>
                 </div>
 
                 <div id="preview" class="preview-container" style="display: none;">
                     <img id="previewImage" alt="Preview">
-                    <button id="removeImage" class="btn-remove">Remove</button>
+                    <button id="removeImage" class="btn-remove">
+                        <span>✕</span> Remove Image
+                    </button>
                 </div>
 
                 <button id="analyzeBtn" class="btn-primary" disabled>
+                    <span class="btn-icon">🔬</span>
                     <span>Analyze Crop</span>
                 </button>
             </div>
 
             <div id="results" class="results-section" style="display: none;">
-                <h2>Analysis Results</h2>
+                <h2 class="section-title">
+                    <span class="title-icon">📊</span>
+                    Analysis Results
+                </h2>
                 
                 <div class="result-card">
-                    <h3>Disease Detected</h3>
-                    <p id="diseaseName" class="disease-name"></p>
-                    <div class="confidence-bar">
-                        <div class="confidence-fill" id="confidenceBar"></div>
+                    <div class="result-header">
+                        <h3>🦠 Disease Detected</h3>
+                        <span id="aiProvider" class="ai-badge"></span>
                     </div>
-                    <p class="confidence-text">Confidence: <span id="confidenceValue"></span>%</p>
+                    <p id="diseaseName" class="disease-name"></p>
+                    <div class="confidence-container">
+                        <div class="confidence-bar">
+                            <div class="confidence-fill" id="confidenceBar">
+                                <span class="confidence-percentage"></span>
+                            </div>
+                        </div>
+                        <p class="confidence-text">Confidence: <span id="confidenceValue"></span>%</p>
+                    </div>
                 </div>
 
                 <div class="treatment-section">
-                    <h3>Treatment Recommendations</h3>
+                    <h3 class="treatment-title">
+                        <span class="title-icon">💊</span>
+                        AI-Generated Treatment Recommendations
+                    </h3>
                     
-                    <div class="treatment-card organic">
-                        <h4>🌿 Organic Treatment</h4>
-                        <p id="organicTreatment"></p>
-                    </div>
+                    <div class="treatment-grid">
+                        <div class="treatment-card organic">
+                            <div class="card-header">
+                                <h4>🌿 Organic Treatment</h4>
+                                <span class="card-badge">Natural</span>
+                            </div>
+                            <div id="organicTreatment" class="treatment-content"></div>
+                        </div>
 
-                    <div class="treatment-card chemical">
-                        <h4>⚗️ Chemical Treatment</h4>
-                        <p id="chemicalTreatment"></p>
-                    </div>
+                        <div class="treatment-card chemical">
+                            <div class="card-header">
+                                <h4>⚗️ Chemical Treatment</h4>
+                                <span class="card-badge">Fast-Acting</span>
+                            </div>
+                            <div id="chemicalTreatment" class="treatment-content"></div>
+                        </div>
 
-                    <div class="treatment-card prevention">
-                        <h4>🛡️ Prevention Methods</h4>
-                        <p id="preventionMethods"></p>
+                        <div class="treatment-card prevention">
+                            <div class="card-header">
+                                <h4>🛡️ Prevention Methods</h4>
+                                <span class="card-badge">Long-Term</span>
+                            </div>
+                            <div id="preventionMethods" class="treatment-content"></div>
+                        </div>
                     </div>
                 </div>
 
                 <div class="action-buttons">
                     <button id="speakBtn" class="btn-secondary">
-                        🔊 Read Aloud
+                        <span class="btn-icon">🔊</span> Read Aloud
                     </button>
                     <button id="downloadBtn" class="btn-secondary">
-                        📄 Download Report
+                        <span class="btn-icon">📄</span> Download Report
                     </button>
                     <button id="newAnalysisBtn" class="btn-primary">
-                        New Analysis
+                        <span class="btn-icon">🔄</span> New Analysis
                     </button>
                 </div>
             </div>
 
             <div id="loading" class="loading" style="display: none;">
-                <div class="spinner"></div>
-                <p>Analyzing your crop image...</p>
+                <div class="loading-content">
+                    <div class="spinner"></div>
+                    <p class="loading-text">🌱 AI is analyzing your crop image...</p>
+                    <div class="loading-dots">
+                        <span></span>
+                        <span></span>
+                        <span></span>
+                    </div>
+                </div>
             </div>
         </main>
 
         <footer>
             <p>© 2024 AgriSage - Empowering Farmers with AI</p>
+            <p class="footer-subtitle">Powered by Gemini AI & Advanced ML Models</p>
         </footer>
     </div>
 
     <audio id="audioPlayer" style="display: none;"></audio>
     <script src="/static/js/main.js"></script>
-    <!-- Add before </body> -->
-{% include 'chat_widget.html' %}
-<link rel="stylesheet" href="/static/css/chat.css">
-<script src="/static/js/chat.js"></script>
 </body>
 </html>

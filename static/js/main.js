@@ -137,14 +137,46 @@ function displayResults(data) {
     const confidenceBar = document.getElementById('confidenceBar');
     confidenceBar.style.width = `${data.confidence}%`;
     
-    // Update treatment information
+    // Update treatment information - Display as formatted lists
     if (data.treatment) {
-        document.getElementById('organicTreatment').textContent = 
-            data.treatment.organic || 'No organic treatment available';
-        document.getElementById('chemicalTreatment').textContent = 
-            data.treatment.chemical || 'No chemical treatment available';
-        document.getElementById('preventionMethods').textContent = 
-            data.treatment.prevention || 'No prevention methods available';
+        // Organic Treatment
+        const organicDiv = document.getElementById('organicTreatment');
+        if (data.treatment.organic && Array.isArray(data.treatment.organic) && data.treatment.organic.length > 0) {
+            let organicHTML = '<ul>';
+            data.treatment.organic.forEach(item => {
+                organicHTML += `<li>${item}</li>`;
+            });
+            organicHTML += '</ul>';
+            organicDiv.innerHTML = organicHTML;
+        } else {
+            organicDiv.innerHTML = '<p>No organic treatment available</p>';
+        }
+        
+        // Chemical Treatment
+        const chemicalDiv = document.getElementById('chemicalTreatment');
+        if (data.treatment.chemical && Array.isArray(data.treatment.chemical) && data.treatment.chemical.length > 0) {
+            let chemicalHTML = '<ul>';
+            data.treatment.chemical.forEach(item => {
+                chemicalHTML += `<li>${item}</li>`;
+            });
+            chemicalHTML += '</ul>';
+            chemicalDiv.innerHTML = chemicalHTML;
+        } else {
+            chemicalDiv.innerHTML = '<p>No chemical treatment available</p>';
+        }
+        
+        // Prevention Methods
+        const preventionDiv = document.getElementById('preventionMethods');
+        if (data.treatment.prevention && Array.isArray(data.treatment.prevention) && data.treatment.prevention.length > 0) {
+            let preventionHTML = '<ul>';
+            data.treatment.prevention.forEach(item => {
+                preventionHTML += `<li>${item}</li>`;
+            });
+            preventionHTML += '</ul>';
+            preventionDiv.innerHTML = preventionHTML;
+        } else {
+            preventionDiv.innerHTML = '<p>Standard prevention practices apply</p>';
+        }
     }
     
     // Show results section
@@ -158,13 +190,20 @@ function displayResults(data) {
 async function speakResults() {
     if (!currentResults) return;
     
-    const text = `
-        Disease detected: ${currentResults.disease}.
-        Confidence level: ${currentResults.confidence} percent.
-        Organic treatment: ${currentResults.treatment?.organic || 'Not available'}.
-        Chemical treatment: ${currentResults.treatment?.chemical || 'Not available'}.
-        Prevention: ${currentResults.treatment?.prevention || 'Not available'}.
-    `;
+    let text = `Disease detected: ${currentResults.disease}. `;
+    text += `Confidence level: ${currentResults.confidence} percent. `;
+    
+    if (currentResults.treatment) {
+        if (currentResults.treatment.organic && currentResults.treatment.organic.length > 0) {
+            text += `Organic treatment: ${currentResults.treatment.organic[0]}. `;
+        }
+        if (currentResults.treatment.chemical && currentResults.treatment.chemical.length > 0) {
+            text += `Chemical treatment: ${currentResults.treatment.chemical[0]}. `;
+        }
+        if (currentResults.treatment.prevention && currentResults.treatment.prevention.length > 0) {
+            text += `Prevention: ${currentResults.treatment.prevention[0]}. `;
+        }
+    }
     
     speakBtn.disabled = true;
     speakBtn.textContent = '🔊 Generating Audio...';
