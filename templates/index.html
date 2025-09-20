@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>AgriSage - AI Farming Doctor</title>
     <link rel="stylesheet" href="/static/css/style.css">
-    <link rel="stylesheet" href="/static/css/chat.css">  <!-- ADD THIS LINE -->
+    <link rel="stylesheet" href="/static/css/chat.css">
     <link rel="icon" href="data:,">
     <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;600;700&display=swap" rel="stylesheet">
 </head>
@@ -18,6 +18,32 @@
                 <div class="header-decoration"></div>
             </div>
         </header>
+
+        <!-- NEW: Navigation Menu -->
+        <nav class="nav-menu">
+            <div class="nav-container">
+                <a href="#home" class="nav-item active" onclick="showSection('home', event)">
+                    <span class="nav-icon">🏠</span>
+                    <span>Home</span>
+                </a>
+                <a href="#weather" class="nav-item" onclick="showWeatherWidget(event)">
+                    <span class="nav-icon">☀️</span>
+                    <span>Weather</span>
+                </a>
+                <a href="#community" class="nav-item" onclick="showCommunityFeed(event)">
+                    <span class="nav-icon">👥</span>
+                    <span>Community</span>
+                </a>
+                <a href="#market" class="nav-item" onclick="showMarketPrices(event)">
+                    <span class="nav-icon">💰</span>
+                    <span>Market</span>
+                </a>
+                <a href="#tips" class="nav-item" onclick="showFarmingTips(event)">
+                    <span class="nav-icon">💡</span>
+                    <span>Tips</span>
+                </a>
+            </div>
+        </nav>
 
         <main>
             <div class="upload-section">
@@ -141,13 +167,71 @@
             </div>
         </main>
 
+        <!-- NEW: Weather Widget -->
+        <div id="weatherWidget" class="weather-widget" style="display: none;">
+            <div class="widget-header">
+                <h3>🌤️ Local Weather for Farmers</h3>
+                <button class="close-btn" onclick="closeWeatherWidget()">✕</button>
+            </div>
+            <div class="widget-body">
+                <div id="weatherLocation" class="weather-location">
+                    <button onclick="getLocationWeather()" class="btn-location">
+                        📍 Get My Location Weather
+                    </button>
+                </div>
+                <div id="weatherContent" class="weather-content" style="display: none;">
+                    <!-- Weather data will be loaded here -->
+                </div>
+            </div>
+        </div>
+
+        <!-- NEW: Community Feed Modal -->
+        <div id="communityModal" class="modal" style="display: none;">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h2>🌾 Agriculture Community Feed</h2>
+                    <span class="close" onclick="closeCommunityModal()">&times;</span>
+                </div>
+                <div class="modal-body">
+                    <div id="communityFeed" class="community-feed">
+                        <!-- Community posts will load here -->
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- NEW: Market Prices Widget -->
+        <div id="marketWidget" class="market-widget" style="display: none;">
+            <div class="widget-header">
+                <h3>💰 Today's Market Prices</h3>
+                <button class="close-btn" onclick="closeMarketWidget()">✕</button>
+            </div>
+            <div class="widget-body">
+                <div id="marketPrices" class="market-prices">
+                    <!-- Market prices will load here -->
+                </div>
+            </div>
+        </div>
+
+        <!-- NEW: Farming Tips Widget -->
+        <div id="tipsWidget" class="tips-widget" style="display: none;">
+            <div class="widget-header">
+                <h3>💡 Farming Tips & Best Practices</h3>
+                <button class="close-btn" onclick="closeTipsWidget()">✕</button>
+            </div>
+            <div class="widget-body">
+                <div id="farmingTips" class="farming-tips">
+                    <!-- Tips will load here -->
+                </div>
+            </div>
+        </div>
+
         <footer>
             <p>© 2024 AgriSage - Empowering Farmers with AI</p>
             <p class="footer-subtitle">Powered by Gemini AI & Advanced ML Models</p>
         </footer>
     </div>
 
-    <!-- ADD CHAT WIDGET HTML HERE -->
     <!-- Chat Widget -->
     <div id="chatWidget" class="chat-widget minimized">
         <div class="chat-header" onclick="toggleChat()">
@@ -207,6 +291,6 @@
 
     <audio id="audioPlayer" style="display: none;"></audio>
     <script src="/static/js/main.js"></script>
-    <script src="/static/js/chat.js"></script>  <!-- ADD THIS LINE -->
+    <script src="/static/js/chat.js"></script>
 </body>
 </html>

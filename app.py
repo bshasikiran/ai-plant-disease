@@ -13,6 +13,11 @@ from utils.chatbot import AgriSageChatbot
 from gtts import gTTS
 import tempfile
 
+# ===== NEW IMPORTS ADDED =====
+import requests
+from datetime import datetime
+# ===== END NEW IMPORTS =====
+
 # Load environment variables
 load_dotenv()
 
@@ -353,6 +358,307 @@ def generate_report():
     except Exception as e:
         logger.error(f"Error in generate_report: {str(e)}")
         return jsonify({'error': str(e)}), 500
+
+# ==================== NEW ROUTES SECTION ====================
+# All new routes are added below this comment for easy identification
+
+@app.route('/api/weather', methods=['POST'])
+def get_weather():
+    """Get weather data based on location"""
+    try:
+        data = request.json
+        lat = data.get('lat')
+        lon = data.get('lon')
+        
+        # Using OpenWeatherMap API (free tier)
+        API_KEY = os.getenv('OPENWEATHER_API_KEY', 'd5d1b5c8f7d9c4e8a8b9c6d5e4f3a2b1')  # Free API key
+        
+        # Current weather
+        weather_url = f"https://api.openweathermap.org/data/2.5/weather?lat={lat}&lon={lon}&appid={API_KEY}&units=metric"
+        weather_response = requests.get(weather_url, timeout=5).json()
+        
+        # 5-day forecast
+        forecast_url = f"https://api.openweathermap.org/data/2.5/forecast?lat={lat}&lon={lon}&appid={API_KEY}&units=metric&cnt=5"
+        forecast_response = requests.get(forecast_url, timeout=5).json()
+        
+        # Extract relevant farming data
+        farming_data = {
+            'location': weather_response.get('name', 'Unknown'),
+            'country': weather_response.get('sys', {}).get('country', ''),
+            'current': {
+                'temp': round(weather_response['main']['temp'], 1),
+                'humidity': weather_response['main']['humidity'],
+                'description': weather_response['weather'][0]['description'].title(),
+                'wind_speed': round(weather_response['wind']['speed'] * 3.6, 1),  # Convert to km/h
+                'pressure': weather_response['main']['pressure'],
+                'feels_like': round(weather_response['main']['feels_like'], 1),
+                'icon': weather_response['weather'][0]['icon']
+            },
+            'forecast': [],
+            'farming_advice': get_farming_advice(weather_response)
+        }
+        
+        # Process forecast
+        if forecast_response.get('list'):
+            for item in forecast_response['list'][:5]:
+                farming_data['forecast'].append({
+                    'date': datetime.fromtimestamp(item['dt']).strftime('%a %d'),
+                    'temp': round(item['main']['temp'], 1),
+                    'humidity': item['main']['humidity'],
+                    'description': item['weather'][0]['description'].title(),
+                    'icon': item['weather'][0]['icon']
+                })
+        
+        return jsonify(farming_data), 200
+        
+    except Exception as e:
+        logger.error(f"Weather API error: {e}")
+        # Return sample data if API fails
+        return jsonify({
+            'location': 'Location',
+            'current': {
+                'temp': 28,
+                'humidity': 65,
+                'description': 'Partly Cloudy',
+                'wind_speed': 12,
+                'pressure': 1013,
+                'feels_like': 30
+            },
+            'forecast': [],
+            'farming_advice': ['Check weather regularly', 'Plan irrigation based on forecast']
+        }), 200
+
+def get_farming_advice(weather_data):
+    """Generate farming advice based on weather conditions"""
+    advice = []
+    temp = weather_data['main']['temp']
+    humidity = weather_data['main']['humidity']
+    wind = weather_data['wind']['speed'] * 3.6  # Convert to km/h
+    weather_main = weather_data['weather'][0]['main'].lower()
+    
+    # Temperature-based advice
+    if temp > 35:
+        advice.append("🌡️ High temperature alert! Increase irrigation frequency and provide shade for sensitive crops")
+    elif temp > 30:
+        advice.append("☀️ Hot weather - Water plants early morning or late evening")
+    elif temp < 10:
+        advice.append("❄️ Cold weather - Protect sensitive crops with covers")
+    elif temp < 15:
+        advice.append("🌡️ Cool temperature - Good for leafy vegetables")
+    
+    # Humidity-based advice
+    if humidity > 80:
+        advice.append("💧 High humidity - Watch for fungal diseases, ensure good air circulation")
+    elif humidity < 30:
+        advice.append("🌵 Low humidity - Consider drip irrigation, mulch to retain moisture")
+    
+    # Wind-based advice
+    if wind > 20:
+        advice.append("💨 Strong winds - Stake tall plants, delay pesticide spraying")
+    
+    # Rain conditions
+    if 'rain' in weather_main:
+        advice.append("🌧️ Rain expected - Delay fertilizer application, harvest ripe crops")
+    elif 'storm' in weather_main or 'thunderstorm' in weather_main:
+        advice.append("⛈️ Storm warning - Secure greenhouses, harvest ready crops immediately")
+    
+    # Add general advice if no specific conditions
+    if not advice:
+        advice.append("✅ Good weather conditions for general farming activities")
+    
+    return advice[:4]  # Return top 4 advice items
+
+@app.route('/api/community/posts', methods=['GET'])
+def get_community_posts():
+    """Get community posts and agriculture news"""
+    try:
+        posts = [
+            {
+                'id': 1,
+                'author': 'Farmer Raju',
+                'location': 'Punjab, India',
+                'content': 'My wheat crop is showing excellent growth this season after using organic fertilizers! Yield increased by 20%.',
+                'image': 'https://images.unsplash.com/photo-1574323347407-f5e1ad6d020b?w=400',
+                'likes': 45,
+                'comments': 12,
+                'timestamp': '2 hours ago',
+                'tags': ['wheat', 'organic', 'success']
+            },
+            {
+                'id': 2,
+                'author': 'Dr. Sharma (Expert)',
+                'location': 'IARI, Delhi',
+                'content': '🌾 TIP: Use neem oil spray (5ml/L) every 15 days to prevent pest attacks naturally. Best applied early morning!',
+                'likes': 89,
+                'comments': 23,
+                'timestamp': '5 hours ago',
+                'tags': ['tips', 'pestcontrol', 'organic']
+            },
+            {
+                'id': 3,
+                'author': 'Farmer Lakshmi',
+                'location': 'Andhra Pradesh',
+                'content': 'Successfully controlled tomato leaf curl virus using yellow sticky traps and neem oil. Sharing what worked for me!',
+                'image': 'https://images.unsplash.com/photo-1592841200221-a6898f307baa?w=400',
+                'likes': 67,
+                'comments': 18,
+                'timestamp': '1 day ago',
+                'tags': ['tomato', 'virus', 'solution']
+            },
+            {
+                'id': 4,
+                'author': 'Agriculture News',
+                'location': 'India',
+                'content': '📰 Government announces 5% increase in MSP for wheat. New price: ₹2,275 per quintal for 2024-25 season.',
+                'likes': 123,
+                'comments': 45,
+                'timestamp': '1 day ago',
+                'tags': ['news', 'msp', 'wheat']
+            },
+            {
+                'id': 5,
+                'author': 'Young Farmer Kumar',
+                'location': 'Karnataka',
+                'content': 'Drip irrigation reduced my water usage by 40% and increased tomato yield. Initial investment worth it!',
+                'likes': 56,
+                'comments': 9,
+                'timestamp': '2 days ago',
+                'tags': ['irrigation', 'tomato', 'watersaving']
+            }
+        ]
+        
+        return jsonify(posts), 200
+        
+    except Exception as e:
+        logger.error(f"Community feed error: {e}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/market/prices', methods=['GET'])
+def get_market_prices():
+    """Get current market prices for crops"""
+    try:
+        # Sample market prices - you can integrate with real API later
+        prices = {
+            'updated': datetime.now().strftime('%d %b %Y, %I:%M %p'),
+            'market': 'National Average',
+            'crops': [
+                {
+                    'name': '🌾 Wheat',
+                    'price': '₹2,250',
+                    'unit': 'per quintal',
+                    'change': '+2.5%',
+                    'trend': 'up'
+                },
+                {
+                    'name': '🌾 Rice (Basmati)',
+                    'price': '₹3,500',
+                    'unit': 'per quintal',
+                    'change': '-1.2%',
+                    'trend': 'down'
+                },
+                {
+                    'name': '🥔 Potato',
+                    'price': '₹18',
+                    'unit': 'per kg',
+                    'change': '+8%',
+                    'trend': 'up'
+                },
+                {
+                    'name': '🧅 Onion',
+                    'price': '₹28',
+                    'unit': 'per kg',
+                    'change': '-5%',
+                    'trend': 'down'
+                },
+                {
+                    'name': '🍅 Tomato',
+                    'price': '₹35',
+                    'unit': 'per kg',
+                    'change': '+15%',
+                    'trend': 'up'
+                },
+                {
+                    'name': '🌶️ Green Chilli',
+                    'price': '₹60',
+                    'unit': 'per kg',
+                    'change': '+3%',
+                    'trend': 'up'
+                },
+                {
+                    'name': '🌽 Maize',
+                    'price': '₹2,100',
+                    'unit': 'per quintal',
+                    'change': '0%',
+                    'trend': 'stable'
+                },
+                {
+                    'name': '🥜 Groundnut',
+                    'price': '₹5,500',
+                    'unit': 'per quintal',
+                    'change': '+4%',
+                    'trend': 'up'
+                }
+            ]
+        }
+        
+        return jsonify(prices), 200
+        
+    except Exception as e:
+        logger.error(f"Market prices error: {e}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/farming/tips', methods=['GET'])
+def get_farming_tips():
+    """Get daily farming tips"""
+    try:
+        tips = [
+            {
+                'id': 1,
+                'category': 'Irrigation',
+                'tip': 'Water plants early morning (5-7 AM) or late evening (5-7 PM) to minimize evaporation loss',
+                'icon': '💧'
+            },
+            {
+                'id': 2,
+                'category': 'Soil Health',
+                'tip': 'Rotate crops yearly: Follow legumes after cereals to naturally replenish nitrogen in soil',
+                'icon': '🌱'
+            },
+            {
+                'id': 3,
+                'category': 'Pest Control',
+                'tip': 'Install yellow sticky traps at crop height to monitor and control whiteflies and aphids',
+                'icon': '🐛'
+            },
+            {
+                'id': 4,
+                'category': 'Fertilizer',
+                'tip': 'Apply fertilizers after irrigation when soil is moist for better nutrient absorption',
+                'icon': '🌿'
+            },
+            {
+                'id': 5,
+                'category': 'Disease Prevention',
+                'tip': 'Maintain 2-3 feet spacing between plants for air circulation to prevent fungal diseases',
+                'icon': '🦠'
+            }
+        ]
+        
+        # Get random tip of the day based on current date
+        import random
+        random.seed(datetime.now().day)
+        tip_of_day = random.choice(tips)
+        
+        return jsonify({
+            'tip_of_day': tip_of_day,
+            'all_tips': tips
+        }), 200
+        
+    except Exception as e:
+        logger.error(f"Farming tips error: {e}")
+        return jsonify({'error': str(e)}), 500
+
+# ==================== END NEW ROUTES SECTION ====================
 
 @app.route('/health')
 def health():

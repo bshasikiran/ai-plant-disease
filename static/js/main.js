@@ -233,7 +233,7 @@ async function speakResults() {
         alert('Failed to generate audio');
     } finally {
         speakBtn.disabled = false;
-        speakBtn.textContent = '🔊 Read Aloud';
+        speakBtn.innerHTML = '<span class="btn-icon">🔊</span> Read Aloud';
     }
 }
 
@@ -242,7 +242,7 @@ async function downloadReport() {
     if (!currentResults) return;
     
     downloadBtn.disabled = true;
-    downloadBtn.textContent = '📄 Generating Report...';
+    downloadBtn.innerHTML = '<span class="btn-icon">📄</span> Generating Report...';
     
     try {
         const response = await fetch('/generate_report', {
@@ -271,7 +271,7 @@ async function downloadReport() {
         alert('Failed to generate report');
     } finally {
         downloadBtn.disabled = false;
-        downloadBtn.textContent = '📄 Download Report';
+        downloadBtn.innerHTML = '<span class="btn-icon">📄</span> Download Report';
     }
 }
 
@@ -283,7 +283,352 @@ function resetAnalysis() {
     window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 
+// ===== NEW FEATURES FUNCTIONS =====
+
+// Navigation function
+function showSection(section, event) {
+    event.preventDefault();
+    
+    // Update active nav item
+    document.querySelectorAll('.nav-item').forEach(item => {
+        item.classList.remove('active');
+    });
+    event.currentTarget.classList.add('active');
+    
+    // Close all widgets
+    closeAllWidgets();
+}
+
+// Close all widgets helper function
+function closeAllWidgets() {
+    document.getElementById('weatherWidget').style.display = 'none';
+    document.getElementById('communityModal').style.display = 'none';
+    document.getElementById('marketWidget').style.display = 'none';
+    document.getElementById('tipsWidget').style.display = 'none';
+}
+
+// Weather Functions
+function showWeatherWidget(event) {
+    event.preventDefault();
+    closeAllWidgets();
+    document.getElementById('weatherWidget').style.display = 'block';
+    
+    // Update active nav
+    document.querySelectorAll('.nav-item').forEach(item => {
+        item.classList.remove('active');
+    });
+    event.currentTarget.classList.add('active');
+}
+
+function closeWeatherWidget() {
+    document.getElementById('weatherWidget').style.display = 'none';
+}
+
+function getLocationWeather() {
+    if (navigator.geolocation) {
+        const weatherContent = document.getElementById('weatherContent');
+        const weatherLocation = document.getElementById('weatherLocation');
+        
+        // Show loading
+        weatherLocation.innerHTML = '<div class="loading-animation"><div class="loading-spinner"></div></div>';
+        
+        navigator.geolocation.getCurrentPosition(
+            position => {
+                fetchWeatherData(position.coords.latitude, position.coords.longitude);
+            },
+            error => {
+                weatherLocation.innerHTML = `
+                    <div class="error-message">
+                        <p>Unable to get your location. Please enable location services.</p>
+                        <button onclick="getLocationWeather()" class="btn-location">Try Again</button>
+                    </div>
+                `;
+            }
+        );
+    } else {
+        alert('Geolocation is not supported by your browser.');
+    }
+}
+
+async function fetchWeatherData(lat, lon) {
+    const weatherContent = document.getElementById('weatherContent');
+    const weatherLocation = document.getElementById('weatherLocation');
+    
+    try {
+        const response = await fetch('/api/weather', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ lat, lon })
+        });
+        
+        const data = await response.json();
+        displayWeatherData(data);
+        weatherLocation.style.display = 'none';
+        weatherContent.style.display = 'block';
+    } catch (error) {
+        console.error('Weather fetch error:', error);
+        weatherLocation.innerHTML = `
+            <div class="error-message">
+                <p>Failed to load weather data. Please try again.</p>
+                <button onclick="getLocationWeather()" class="btn-location">Retry</button>
+            </div>
+        `;
+    }
+}
+
+function displayWeatherData(data) {
+    const weatherContent = document.getElementById('weatherContent');
+    
+    // Create farming advice HTML
+    let adviceHTML = '';
+    if (data.farming_advice && data.farming_advice.length > 0) {
+        adviceHTML = `
+            <div class="farming-advice">
+                <div class="advice-title">🌾 Farming Recommendations Based on Weather:</div>
+                ${data.farming_advice.map(advice => 
+                    `<div class="advice-item">${advice}</div>`
+                ).join('')}
+            </div>
+        `;
+    }
+    
+    // Create forecast HTML
+    let forecastHTML = '';
+    if (data.forecast && data.forecast.length > 0) {
+        forecastHTML = `
+            <div class="weather-forecast">
+                <div class="forecast-title">5-Day Forecast</div>
+                <div class="forecast-container">
+                    ${data.forecast.map(day => `
+                        <div class="forecast-day">
+                            <div class="forecast-date">${day.date}</div>
+                            <div class="forecast-temp">${day.temp}°C</div>
+                            <div class="forecast-desc">${day.description}</div>
+                            <div class="detail-label">💧 ${day.humidity}%</div>
+                        </div>
+                    `).join('')}
+                </div>
+            </div>
+        `;
+    }
+    
+    weatherContent.innerHTML = `
+        <div class="current-weather">
+            <div class="weather-main">
+                <div>
+                    <div class="weather-location-name">📍 ${data.location}, ${data.country || ''}</div>
+                    <div class="weather-temp">${data.current.temp}°C</div>
+                    <div class="weather-desc">${data.current.description}</div>
+                </div>
+                <div style="text-align: right;">
+                    <div style="font-size: 1.2em; margin-bottom: 10px;">Feels like ${data.current.feels_like}°C</div>
+                </div>
+            </div>
+            <div class="weather-details">
+                <div class="weather-detail">
+                    <div class="detail-label">Humidity</div>
+                    <div class="detail-value">💧 ${data.current.humidity}%</div>
+                </div>
+                <div class="weather-detail">
+                    <div class="detail-label">Wind Speed</div>
+                    <div class="detail-value">💨 ${data.current.wind_speed} km/h</div>
+                </div>
+                <div class="weather-detail">
+                    <div class="detail-label">Pressure</div>
+                    <div class="detail-value">📊 ${data.current.pressure} hPa</div>
+                </div>
+            </div>
+        </div>
+        ${adviceHTML}
+        ${forecastHTML}
+    `;
+}
+
+// Community Functions
+function showCommunityFeed(event) {
+    event.preventDefault();
+    closeAllWidgets();
+    document.getElementById('communityModal').style.display = 'flex';
+    loadCommunityPosts();
+    
+    // Update active nav
+    document.querySelectorAll('.nav-item').forEach(item => {
+        item.classList.remove('active');
+    });
+    event.currentTarget.classList.add('active');
+}
+
+function closeCommunityModal() {
+    document.getElementById('communityModal').style.display = 'none';
+}
+
+async function loadCommunityPosts() {
+    const feedContainer = document.getElementById('communityFeed');
+    feedContainer.innerHTML = '<div class="loading-animation"><div class="loading-spinner"></div></div>';
+    
+    try {
+        const response = await fetch('/api/community/posts');
+        const posts = await response.json();
+        
+        feedContainer.innerHTML = posts.map(post => `
+            <div class="feed-post">
+                <div class="post-header">
+                    <div>
+                        <div class="post-author">${post.author}</div>
+                        <div class="post-location">📍 ${post.location} • ${post.timestamp}</div>
+                    </div>
+                </div>
+                <div class="post-content">${post.content}</div>
+                ${post.image ? `<img src="${post.image}" class="post-image" alt="Post image" onerror="this.style.display='none'">` : ''}
+                <div class="post-tags">
+                    ${post.tags.map(tag => `<span class="tag">#${tag}</span>`).join('')}
+                </div>
+                <div class="post-actions">
+                    <div class="post-action" onclick="likePost(${post.id})">
+                        👍 ${post.likes} Likes
+                    </div>
+                    <div class="post-action">
+                        💬 ${post.comments} Comments
+                    </div>
+                    <div class="post-action">
+                        🔗 Share
+                    </div>
+                </div>
+            </div>
+        `).join('');
+    } catch (error) {
+        console.error('Community feed error:', error);
+        feedContainer.innerHTML = '<div class="error">Failed to load community posts. Please try again.</div>';
+    }
+}
+
+function likePost(postId) {
+    // For now, just show an alert. You can implement actual like functionality later
+    alert('Thanks for liking! (Feature coming soon)');
+}
+
+// Market Prices Functions
+function showMarketPrices(event) {
+    event.preventDefault();
+    closeAllWidgets();
+    document.getElementById('marketWidget').style.display = 'block';
+    loadMarketPrices();
+    
+    // Update active nav
+    document.querySelectorAll('.nav-item').forEach(item => {
+        item.classList.remove('active');
+    });
+    event.currentTarget.classList.add('active');
+}
+
+function closeMarketWidget() {
+    document.getElementById('marketWidget').style.display = 'none';
+}
+
+async function loadMarketPrices() {
+    const marketContainer = document.getElementById('marketPrices');
+    marketContainer.innerHTML = '<div class="loading-animation"><div class="loading-spinner"></div></div>';
+    
+    try {
+        const response = await fetch('/api/market/prices');
+        const data = await response.json();
+        
+        marketContainer.innerHTML = `
+            <div class="market-info">
+                <div class="market-title">${data.market}</div>
+                <div class="market-update">Last Updated: ${data.updated}</div>
+            </div>
+            ${data.crops.map(item => `
+                <div class="price-item">
+                    <div class="crop-info">
+                        <span class="crop-name">${item.name}</span>
+                    </div>
+                    <div class="price-info">
+                        <div class="crop-price">${item.price}</div>
+                        <div class="price-unit">${item.unit}</div>
+                        <div class="price-change price-${item.trend}">
+                            ${item.trend === 'up' ? '↑' : item.trend === 'down' ? '↓' : '→'} ${item.change}
+                        </div>
+                    </div>
+                </div>
+            `).join('')}
+        `;
+    } catch (error) {
+        console.error('Market prices error:', error);
+        marketContainer.innerHTML = '<div class="error">Failed to load market prices. Please try again.</div>';
+    }
+}
+
+// Farming Tips Functions
+function showFarmingTips(event) {
+    event.preventDefault();
+    closeAllWidgets();
+    document.getElementById('tipsWidget').style.display = 'block';
+    loadFarmingTips();
+    
+    // Update active nav
+    document.querySelectorAll('.nav-item').forEach(item => {
+        item.classList.remove('active');
+    });
+    event.currentTarget.classList.add('active');
+}
+
+function closeTipsWidget() {
+    document.getElementById('tipsWidget').style.display = 'none';
+}
+
+async function loadFarmingTips() {
+    const tipsContainer = document.getElementById('farmingTips');
+    tipsContainer.innerHTML = '<div class="loading-animation"><div class="loading-spinner"></div></div>';
+    
+    try {
+        const response = await fetch('/api/farming/tips');
+        const data = await response.json();
+        
+        tipsContainer.innerHTML = `
+            <div class="tip-of-day">
+                <div class="tip-of-day-title">
+                    ${data.tip_of_day.icon} Tip of the Day - ${data.tip_of_day.category}
+                </div>
+                <div class="tip-of-day-content">
+                    ${data.tip_of_day.tip}
+                </div>
+            </div>
+            <div class="tips-list">
+                ${data.all_tips.map(tip => `
+                    <div class="tip-item">
+                        <div class="tip-category">
+                            ${tip.icon} ${tip.category}
+                        </div>
+                        <div class="tip-text">${tip.tip}</div>
+                    </div>
+                `).join('')}
+            </div>
+        `;
+    } catch (error) {
+        console.error('Farming tips error:', error);
+        tipsContainer.innerHTML = '<div class="error">Failed to load farming tips. Please try again.</div>';
+    }
+}
+
+// Close modals when clicking outside
+window.onclick = function(event) {
+    if (event.target.className === 'modal') {
+        event.target.style.display = 'none';
+    }
+}
+
+// Add keyboard shortcuts
+document.addEventListener('keydown', function(e) {
+    if (e.key === 'Escape') {
+        // Close all modals
+        closeAllWidgets();
+    }
+});
+
 // Initialize
 document.addEventListener('DOMContentLoaded', () => {
-    console.log('AgriSage initialized');
+    console.log('AgriSage initialized with new features!');
 });
