@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>AgriSage - AI Farming Doctor</title>
     <link rel="stylesheet" href="/static/css/style.css">
+    <link rel="stylesheet" href="/static/css/chat.css">  <!-- ADD THIS LINE -->
     <link rel="icon" href="data:,">
     <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;600;700&display=swap" rel="stylesheet">
 </head>
@@ -146,7 +147,66 @@
         </footer>
     </div>
 
+    <!-- ADD CHAT WIDGET HTML HERE -->
+    <!-- Chat Widget -->
+    <div id="chatWidget" class="chat-widget minimized">
+        <div class="chat-header" onclick="toggleChat()">
+            <div class="chat-title">
+                <span class="chat-icon">💬</span>
+                <span>AgriSage Assistant</span>
+            </div>
+            <div class="chat-toggle">
+                <span class="minimize-icon">−</span>
+            </div>
+        </div>
+        
+        <div class="chat-body">
+            <div id="chatMessages" class="chat-messages">
+                <!-- Welcome message -->
+                <div class="chat-message bot-message">
+                    <div class="message-avatar">🤖</div>
+                    <div class="message-content">
+                        <div>Hello! I'm your AgriSage Assistant. I can help you with:</div>
+                        <ul style="margin: 10px 0; padding-left: 20px;">
+                            <li>🌱 Crop disease identification</li>
+                            <li>💊 Treatment recommendations</li>
+                            <li>🌾 Farming best practices</li>
+                            <li>🐛 Pest control advice</li>
+                        </ul>
+                        <div>How can I help you today?</div>
+                    </div>
+                </div>
+            </div>
+            
+            <div id="chatSuggestions" class="chat-suggestions">
+                <button class="suggestion-chip" onclick="sendSuggestion('How to identify plant diseases?')">How to identify diseases?</button>
+                <button class="suggestion-chip" onclick="sendSuggestion('Best organic fertilizers')">Organic fertilizers</button>
+                <button class="suggestion-chip" onclick="sendSuggestion('Pest control methods')">Pest control</button>
+            </div>
+            
+            <div class="chat-input-container">
+                <div id="imagePreviewContainer" class="image-preview-container" style="display: none;">
+                    <img id="chatImagePreview" class="chat-image-preview">
+                    <button class="remove-image-btn" onclick="removeChatImage()">✕</button>
+                </div>
+                
+                <div class="chat-input-wrapper">
+                    <input type="file" id="chatImageInput" accept="image/*" style="display: none;">
+                    <button class="chat-attach-btn" onclick="document.getElementById('chatImageInput').click()">
+                        📷
+                    </button>
+                    <input type="text" id="chatInput" class="chat-input" placeholder="Type your message..." 
+                           onkeypress="if(event.key==='Enter' && !event.shiftKey) { event.preventDefault(); sendChatMessage(); }">
+                    <button class="chat-send-btn" onclick="sendChatMessage()">
+                        ➤
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <audio id="audioPlayer" style="display: none;"></audio>
     <script src="/static/js/main.js"></script>
+    <script src="/static/js/chat.js"></script>  <!-- ADD THIS LINE -->
 </body>
 </html>
