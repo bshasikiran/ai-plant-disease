@@ -13,3 +13,6 @@ transformers
 torch
 huggingface-hub
 openai
+googletrans 
+pyttsx3
+playsound

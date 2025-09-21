@@ -1,567 +1,541 @@
+# utils/disease_detector.py
+
 import os
 import logging
 import json
 import time
-from typing import Dict, Any, Optional, List
+from typing import Dict, Any, Optional, List, Tuple
 from PIL import Image
+import numpy as np
 import requests
 from io import BytesIO
 import base64
-import re
+import google.generativeai as genai
+from openai import OpenAI
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 
 class DiseaseDetector:
     def __init__(self):
-        """Initialize disease detector with AI providers"""
+        """Initialize the disease detection system"""
         self.providers_initialized = {}
         self.provider_priority = []
-
-        # Load env keys
-        self.gemini_key = os.getenv('GEMINI_API_KEY')
-        self.hf_token = os.getenv('HF_TOKEN')
-
+        
+        # Load API keys
+        self.gemini_key = os.getenv('GEMINI_API_KEY', 'AIzaSyByZjcSzMJJKjQkPt3UDiKwbfKFR54Syg8')
+        self.openai_key = os.getenv('OPENAI_API_KEY')
+        
         # Initialize providers
-        self.init_gemini()
-        self.init_huggingface()
+        self.init_providers()
+        
+        # Disease database
+        self.init_disease_database()
+        
+        logger.info("🚀 Disease Detector initialized successfully!")
 
-        # Set priority list
-        self.set_provider_priority()
+    def init_providers(self):
+        """Initialize AI providers"""
+        # Initialize Gemini (Primary provider)
+        if self.gemini_key:
+            try:
+                genai.configure(api_key=self.gemini_key)
+                self.gemini_model = genai.GenerativeModel('gemini-1.5-flash')
+                self.providers_initialized['gemini'] = True
+                self.provider_priority.append('gemini')
+                logger.info("✅ Gemini AI initialized")
+            except Exception as e:
+                logger.error(f"Failed to initialize Gemini: {e}")
+                self.providers_initialized['gemini'] = False
+        
+        # Initialize OpenAI (Backup provider)
+        if self.openai_key:
+            try:
+                self.openai_client = OpenAI(api_key=self.openai_key)
+                self.providers_initialized['openai'] = True
+                self.provider_priority.append('openai')
+                logger.info("✅ OpenAI initialized")
+            except Exception as e:
+                logger.error(f"Failed to initialize OpenAI: {e}")
+                self.providers_initialized['openai'] = False
 
-        logger.info(f"Providers ready: {self.provider_priority}")
+    def init_disease_database(self):
+        """Initialize disease database with common plant diseases"""
+        self.disease_database = {
+            'early_blight': {
+                'name': 'Early Blight',
+                'pathogen': 'Alternaria solani',
+                'symptoms': ['Dark spots with concentric rings', 'Yellow halos around spots', 'Lower leaves affected first'],
+                'crops': ['Tomato', 'Potato', 'Eggplant']
+            },
+            'late_blight': {
+                'name': 'Late Blight',
+                'pathogen': 'Phytophthora infestans',
+                'symptoms': ['Water-soaked spots', 'White fuzzy growth', 'Rapid plant death'],
+                'crops': ['Tomato', 'Potato']
+            },
+            'powdery_mildew': {
+                'name': 'Powdery Mildew',
+                'pathogen': 'Erysiphe spp.',
+                'symptoms': ['White powdery coating', 'Leaf curling', 'Stunted growth'],
+                'crops': ['Cucumber', 'Squash', 'Grapes', 'Roses']
+            },
+            'bacterial_spot': {
+                'name': 'Bacterial Spot',
+                'pathogen': 'Xanthomonas spp.',
+                'symptoms': ['Dark water-soaked spots', 'Yellow halos', 'Leaf drop'],
+                'crops': ['Tomato', 'Pepper']
+            },
+            'leaf_curl': {
+                'name': 'Leaf Curl Virus',
+                'pathogen': 'Begomovirus',
+                'symptoms': ['Upward leaf curling', 'Leaf thickening', 'Yellowing'],
+                'crops': ['Tomato', 'Chili', 'Cotton']
+            },
+            'rust': {
+                'name': 'Rust',
+                'pathogen': 'Puccinia spp.',
+                'symptoms': ['Orange/rust colored pustules', 'Yellowing leaves', 'Premature leaf drop'],
+                'crops': ['Wheat', 'Bean', 'Corn']
+            },
+            'healthy': {
+                'name': 'Healthy Plant',
+                'pathogen': 'None',
+                'symptoms': ['No visible disease symptoms', 'Normal growth', 'Good color'],
+                'crops': ['All']
+            }
+        }
 
-    def init_gemini(self):
-        """Initialize Google Gemini client if API key present."""
-        if not self.gemini_key:
-            self.providers_initialized['gemini'] = False
-            return
-
+    def validate_plant_image(self, image_path: str) -> Tuple[bool, float]:
+        """Simple validation to check if image is likely a plant"""
         try:
-            import google.generativeai as genai
-            genai.configure(api_key=self.gemini_key)
-            # Keep a reference to the genai module and default model name
-            self.genai = genai
-            # model name can be adjusted by you; keep as attribute
-            self.gemini_model_name = os.getenv('GEMINI_MODEL', 'gemini-1.5-flash')
-            self.providers_initialized['gemini'] = True
-            logger.info("✅ Gemini initialized")
+            # Open and check image
+            img = Image.open(image_path)
+            
+            # Convert to RGB if needed
+            if img.mode != 'RGB':
+                img = img.convert('RGB')
+            
+            # Basic checks
+            width, height = img.size
+            
+            # Check minimum size
+            if width < 100 or height < 100:
+                return False, 0.0
+            
+            # Check if image has reasonable dimensions
+            if width > 10000 or height > 10000:
+                return False, 0.0
+            
+            # Convert to numpy array for color analysis
+            img_array = np.array(img)
+            
+            # Check for green content (plants usually have green)
+            green_channel = img_array[:, :, 1]
+            red_channel = img_array[:, :, 0]
+            blue_channel = img_array[:, :, 2]
+            
+            # Calculate green dominance
+            green_dominance = np.mean(green_channel > red_channel) * np.mean(green_channel > blue_channel)
+            
+            # If image has significant green content, likely a plant
+            if green_dominance > 0.2:
+                confidence = min(95, green_dominance * 100)
+                return True, confidence
+            
+            # Check for brown/yellow (dried plants or diseased)
+            avg_red = np.mean(red_channel)
+            avg_green = np.mean(green_channel)
+            avg_blue = np.mean(blue_channel)
+            
+            # Brown/yellow detection
+            if avg_red > avg_blue and avg_green > avg_blue:
+                return True, 70.0
+            
+            # Default: assume it might be a plant with lower confidence
+            return True, 60.0
+            
         except Exception as e:
-            logger.warning(f"Gemini init failed: {e}")
-            self.providers_initialized['gemini'] = False
+            logger.error(f"Validation error: {e}")
+            # On error, assume it might be a plant
+            return True, 50.0
 
-    def init_huggingface(self):
-        """Initialize HuggingFace inference settings."""
-        # list of image classification models to try
-        self.hf_models = [
-            "zuppif/plantdisease",
-            "emre/plant_disease_detection",
-            "linkanjarad/mobilenet_v2_1.0_224-plant-disease-identification"
-        ]
-        self.current_model_idx = 0
-        self.update_hf_model()
+    def detect_with_gemini(self, image_path: str) -> Dict[str, Any]:
+        """Detect disease using Gemini AI"""
+        try:
+            # Open image
+            img = Image.open(image_path)
+            
+            # Prepare prompt
+            prompt = """You are an expert plant pathologist. Analyze this plant image and provide:
 
-        if self.hf_token:
-            self.hf_headers = {
-                "Authorization": f"Bearer {self.hf_token}",
-                "Content-Type": "application/octet-stream"
-            }
-        else:
-            self.hf_headers = {"Content-Type": "application/octet-stream"}
+1. Plant/Crop Type (if identifiable)
+2. Disease Name (or "Healthy" if no disease)
+3. Confidence Level (0-100)
+4. Pathogen Name (if diseased)
+5. Key Symptoms observed
+6. Severity (Low/Medium/High)
 
-        # we still mark huggingface available because we can attempt unauthenticated inference too
-        self.providers_initialized['huggingface'] = True
+Please respond in this exact format:
+CROP: [crop name]
+DISEASE: [disease name or Healthy]
+CONFIDENCE: [number]
+PATHOGEN: [pathogen name or None]
+SYMPTOMS: [comma-separated symptoms]
+SEVERITY: [Low/Medium/High/None]
 
-    def update_hf_model(self):
-        """Update HF model url based on index."""
-        self.current_hf_model = self.hf_models[self.current_model_idx]
-        self.hf_api_url = f"https://api-inference.huggingface.co/models/{self.current_hf_model}"
+Be specific and accurate. If you cannot identify a disease, state "Healthy" or "Unknown"."""
 
-    def set_provider_priority(self):
-        """Set provider priority based on initialization success."""
-        self.provider_priority = []
-        for provider in ['gemini', 'huggingface']:
-            if self.providers_initialized.get(provider, False):
-                self.provider_priority.append(provider)
+            # Generate content
+            response = self.gemini_model.generate_content([prompt, img])
+            
+            if response and response.text:
+                # Parse response
+                result = self.parse_gemini_response(response.text)
+                result['provider'] = 'Gemini AI'
+                return result
+            
+        except Exception as e:
+            logger.error(f"Gemini detection error: {e}")
+        
+        return None
 
-        # If none initialized, still keep huggingface as fallback attempt
-        if not self.provider_priority:
-            self.provider_priority = ['huggingface']
-
-    def clean_text(self, text: str, preserve_newlines: bool = False) -> str:
-        """
-        Clean text for display. By default collapses whitespace; set preserve_newlines=True
-        to keep newline structure for parsing sections.
-        """
-        if not text:
-            return ""
-
-        # Remove KaTeX-like placeholders specifically used earlier
-        text = re.sub(r'KATEX_INLINE_OPEN[^)]*KATEX_INLINE_CLOSE', '', text)
-
-        # Remove markdown bold/italic markers but preserve newlines optionally
-        text = text.replace('**', '').replace('*', '')
-
-        # Remove markdown headers start
-        text = re.sub(r'#{1,6}\s*', '', text)
-
-        if preserve_newlines:
-            # Normalize CRLF to LF
-            text = text.replace('\r\n', '\n').replace('\r', '\n')
-            # Remove duplicate empty lines
-            text = re.sub(r'\n\s*\n+', '\n\n', text)
-            # Trim spaces on each line
-            text = "\n".join([ln.strip() for ln in text.split("\n")])
-        else:
-            # remove all excess whitespace
-            text = re.sub(r'\s+', ' ', text)
-
-        return text.strip()
-
-    def detect_disease(self, image_path: str) -> Dict[str, Any]:
-        """Main detection method"""
-        logger.info(f"Starting detection for: {image_path}")
-
-        if not os.path.exists(image_path):
-            return {
-                'disease': 'File Error',
-                'confidence': 0,
-                'error': 'Image file not found'
-            }
-
-        result = None
-
-        # Try providers in priority order
-        for provider in self.provider_priority:
-            if provider == 'gemini':
-                result = self.detect_with_gemini(image_path)
-                if result:
-                    break
-            elif provider == 'huggingface':
-                result = self.detect_with_huggingface(image_path)
-                if result:
-                    break
-
-        # If no detection worked, use fallback
-        if not result:
-            result = self.get_fallback_detection()
-
-        # Clean disease name
-        if result and result.get('disease'):
-            result['disease'] = self.clean_text(result['disease'])
-
-        # Generate treatment (or healthy defaults)
-        if result and result.get('disease'):
-            result['treatment'] = self.generate_ai_treatment(result['disease'], result.get('confidence', 75))
-
+    def parse_gemini_response(self, text: str) -> Dict[str, Any]:
+        """Parse Gemini response into structured format"""
+        import re
+        
+        result = {
+            'disease': 'Unknown',
+            'confidence': 75,
+            'pathogen': '',
+            'symptoms': [],
+            'severity': 'Unknown',
+            'crop': ''
+        }
+        
+        try:
+            # Extract information using regex
+            lines = text.strip().split('\n')
+            
+            for line in lines:
+                if 'DISEASE:' in line:
+                    disease = line.split('DISEASE:')[1].strip()
+                    result['disease'] = disease if disease else 'Unknown'
+                
+                elif 'CONFIDENCE:' in line:
+                    conf = re.search(r'\d+', line)
+                    if conf:
+                        result['confidence'] = min(100, max(0, int(conf.group())))
+                
+                elif 'PATHOGEN:' in line:
+                    pathogen = line.split('PATHOGEN:')[1].strip()
+                    result['pathogen'] = pathogen if pathogen and pathogen.lower() != 'none' else ''
+                
+                elif 'SYMPTOMS:' in line:
+                    symptoms = line.split('SYMPTOMS:')[1].strip()
+                    result['symptoms'] = [s.strip() for s in symptoms.split(',') if s.strip()]
+                
+                elif 'SEVERITY:' in line:
+                    severity = line.split('SEVERITY:')[1].strip()
+                    result['severity'] = severity if severity else 'Unknown'
+                
+                elif 'CROP:' in line:
+                    crop = line.split('CROP:')[1].strip()
+                    result['crop'] = crop if crop else ''
+            
+            # Validate disease name
+            if result['disease'].lower() in ['healthy', 'no disease', 'none']:
+                result['disease'] = 'Healthy Plant'
+                result['confidence'] = 95
+                result['severity'] = 'None'
+            
+        except Exception as e:
+            logger.error(f"Error parsing Gemini response: {e}")
+        
         return result
 
-    def detect_with_gemini(self, image_path: str) -> Optional[Dict]:
-        """Detect using Gemini (if configured). Returns dict or None."""
-        if not self.providers_initialized.get('gemini'):
-            return None
-
+    def get_fallback_detection(self, image_path: str) -> Dict[str, Any]:
+        """Fallback detection based on image analysis"""
         try:
-            # import kept local to avoid import error if not installed
-            genai = self.genai
-
-            # Read image bytes
-            with open(image_path, 'rb') as f:
-                image_bytes = f.read()
-
-            # Build multimodal input
-            prompt = (
-                "Analyze this plant image and identify any disease.\n\n"
-                "IMPORTANT:\n"
-                "- If the plant is healthy, reply exactly: Healthy Plant\n"
-                "- If diseased, provide ONLY the disease name (one short phrase)\n"
-                "- Do not use markdown or extra commentary\n"
-                "- Be concise and direct\n\n"
-                "What do you see?"
-            )
-
-            # The genai API may accept images as 'image' content — below is a tolerant pattern.
-            # If your installed google.generativeai client uses a different signature, adapt accordingly.
-            # We call generate() with an input list combining text and the image bytes.
-            response = genai.generate(
-                model=self.gemini_model_name,
-                input=[{"role": "user", "content": prompt}, {"type": "image", "image_bytes": image_bytes}],
-                temperature=0.1,
-                max_output_tokens=150
-            )
-
-            # response may have .text or .outputs; unify to string
-            text = ""
-            if hasattr(response, "text") and response.text:
-                text = response.text
+            img = Image.open(image_path)
+            img_array = np.array(img)
+            
+            # Analyze colors
+            avg_color = np.mean(img_array, axis=(0, 1))
+            
+            # Simple heuristic-based detection
+            if avg_color[1] > avg_color[0] and avg_color[1] > avg_color[2]:
+                # Greenish - likely healthy
+                return {
+                    'disease': 'Healthy Plant',
+                    'confidence': 70,
+                    'pathogen': '',
+                    'symptoms': ['Good green color', 'No visible spots'],
+                    'severity': 'None',
+                    'provider': 'Image Analysis'
+                }
+            elif avg_color[0] > avg_color[1]:
+                # Reddish/Brownish - possible disease
+                return {
+                    'disease': 'Possible Fungal Disease',
+                    'confidence': 60,
+                    'pathogen': 'Unknown fungus',
+                    'symptoms': ['Discoloration', 'Possible spots'],
+                    'severity': 'Medium',
+                    'provider': 'Image Analysis'
+                }
             else:
-                # Try more complex structure
-                try:
-                    # Some genai versions: response[0].content[0].text
-                    text = str(response)
-                except Exception:
-                    text = ""
-
-            text = text.strip()
-            disease = self.extract_disease_from_text(text)
-
-            confidence = 90 if 'healthy' in disease.lower() else 85
-
-            return {
-                'disease': disease,
-                'confidence': confidence,
-                'provider': 'Gemini AI',
-                'raw': text
-            }
-
+                # Yellowish
+                return {
+                    'disease': 'Nutrient Deficiency or Disease',
+                    'confidence': 65,
+                    'pathogen': '',
+                    'symptoms': ['Yellowing', 'Possible chlorosis'],
+                    'severity': 'Low',
+                    'provider': 'Image Analysis'
+                }
+                
         except Exception as e:
-            logger.error(f"Gemini error: {e}", exc_info=True)
-            return None
-
-    def extract_disease_from_text(self, text: str) -> str:
-        """Extract clean disease name from AI/text response."""
-        if not text:
-            return "Unknown Disease"
-
-        # Keep text cleaned but preserve sentence structure
-        cleaned = self.clean_text(text, preserve_newlines=False)
-
-        # Detect healthy cases
-        healthy_tokens = ['healthy', 'no disease', 'appears healthy', 'looks healthy', 'no sign of disease']
-        if any(tok in cleaned.lower() for tok in healthy_tokens):
-            return "Healthy Plant"
-
-        # Map common words to canonical names
-        diseases = {
-            'early blight': 'Early Blight',
-            'late blight': 'Late Blight',
-            'bacterial spot': 'Bacterial Spot',
-            'powdery mildew': 'Powdery Mildew',
-            'leaf mold': 'Leaf Mold',
-            'leaf spot': 'Leaf Spot',
-            'rust': 'Rust Disease',
-            'wilt': 'Wilt Disease',
-            'root rot': 'Root Rot',
-            'mosaic': 'Mosaic Virus',
-            'leaf curl': 'Leaf Curl'
+            logger.error(f"Fallback detection error: {e}")
+            
+        return {
+            'disease': 'Unknown',
+            'confidence': 50,
+            'pathogen': '',
+            'symptoms': [],
+            'severity': 'Unknown',
+            'provider': 'Default'
         }
 
-        text_lower = cleaned.lower()
-        for key, name in diseases.items():
-            if key in text_lower:
-                return name
-
-        # fallback: first sentence or small phrase
-        sentences = re.split(r'[.\n]', text)
-        for s in sentences:
-            s = s.strip()
-            if s:
-                # remove punctuation
-                s = re.sub(r'[^\w\s-]', '', s)
-                if len(s) > 1:
-                    return s[:60]
-        return "Unknown Disease"
-
-    def generate_ai_treatment(self, disease_name: str, confidence: float) -> Dict:
-        """Generate AI-powered treatment. Uses Gemini when available; otherwise falls back."""
-        # If healthy, return a small set of recommendations
-        if 'healthy' in disease_name.lower():
+    def get_treatment_recommendations(self, disease: str, pathogen: str = '') -> Dict[str, List[str]]:
+        """Get treatment recommendations for detected disease"""
+        
+        # Check if healthy
+        if 'healthy' in disease.lower():
             return {
                 'organic': [
-                    'Maintain regular watering schedule and avoid overwatering.',
-                    'Apply organic compost monthly to improve soil health.',
-                    'Monitor plants regularly for early signs of stress or pests.',
-                    'Ensure proper spacing and pruning for good airflow.'
+                    'Continue regular watering schedule',
+                    'Apply organic compost monthly',
+                    'Monitor for any changes',
+                    'Maintain good air circulation'
                 ],
                 'chemical': [
-                    'No chemical treatment needed for healthy plants.',
-                    'Optional: balanced NPK if nutrient deficiency detected.'
+                    'No chemical treatment needed',
+                    'Optional: Apply balanced NPK fertilizer'
                 ],
                 'prevention': [
-                    'Remove dead leaves and debris regularly.',
-                    'Practice crop rotation and use certified seeds.',
-                    'Maintain proper drainage and avoid waterlogging.'
-                ]
+                    'Regular inspection for early detection',
+                    'Maintain proper plant spacing',
+                    'Remove dead leaves promptly',
+                    'Use disease-resistant varieties'
+                ],
+                'immediate_actions': [],
+                'ai_generated': True
             }
-
-        # Try Gemini to create formatted treatment text
-        if self.providers_initialized.get('gemini'):
-            try:
-                genai = self.genai
-                prompt = (
-                    f'For the plant disease "{disease_name}", provide treatment recommendations.\n\n'
-                    'Format your response EXACTLY like this (no markdown, no asterisks):\n\n'
-                    'ORGANIC TREATMENT:\n'
-                    '- First organic method with specific measurements\n'
-                    '- Second organic method with application details\n'
-                    '- Third organic method with frequency\n\n'
-                    'CHEMICAL TREATMENT:\n'
-                    '- First chemical with exact dosage\n'
-                    '- Second chemical with brand names (if appropriate)\n'
-                    '- Safety precautions\n\n'
-                    'PREVENTION:\n'
-                    '- First prevention method\n'
-                    '- Second prevention method\n'
-                    '- Third prevention method\n\n'
-                    'Be specific, practical, and DO NOT use any special formatting or extra commentary.'
-                )
-
-                # If your genai version doesn't accept image here, just use text prompt
-                response = genai.generate(
-                    model=self.gemini_model_name,
-                    input=prompt,
-                    temperature=0.3,
-                    max_output_tokens=500
-                )
-
-                # extract text
-                text = ""
-                if hasattr(response, "text") and response.text:
-                    text = response.text
-                else:
-                    text = str(response)
-
-                # Parse the response (preserve newlines for checking headers)
-                treatments = self.parse_treatment_response(text)
-
-                # if any section has content, return it
-                if any(treatments.get(k) for k in ['organic', 'chemical', 'prevention']):
-                    return treatments
-
-            except Exception as e:
-                logger.error(f"Treatment generation (Gemini) error: {e}", exc_info=True)
-
-        # If we reach here, fall back to rule-based treatment
-        logger.info("Using fallback treatment (no model generated a result).")
-        return self.get_fallback_treatment(disease_name)
-
-    def parse_treatment_response(self, text: str) -> Dict:
-        """Parse treatment response while preserving section headers.
-
-        This intentionally preserves new lines so we can detect section lines like:
-        ORGANIC TREATMENT:
-        - ...
-        """
-        if not text:
-            return self._default_treatments_empty()
-
-        raw = self.clean_text(text, preserve_newlines=True)
-
-        treatments = {
+        
+        # Default disease treatment
+        treatment = {
             'organic': [],
             'chemical': [],
-            'prevention': []
+            'prevention': [],
+            'immediate_actions': [],
+            'ai_generated': True
         }
-
-        current_section = None
-        lines = raw.split('\n')
-
-        for ln in lines:
-            line = ln.strip()
-            if not line:
-                continue
-
-            up = line.upper()
-
-            # detect headers (allow small variants)
-            if 'ORGANIC TREATMENT' in up or up.startswith('ORGANIC:') or 'ORGANIC' == up:
-                current_section = 'organic'
-                continue
-            if 'CHEMICAL TREATMENT' in up or 'CHEMICAL:' in up or 'CHEMICAL' == up:
-                current_section = 'chemical'
-                continue
-            if 'PREVENTION' in up or up.startswith('PREVENTION:'):
-                current_section = 'prevention'
-                continue
-
-            # If line starts with dash or bullet, strip bullets
-            cleaned_line = re.sub(r'^[\-\u2022\*\s]+', '', line)
-            # Remove any leading numbering like "1." or "a)"
-            cleaned_line = re.sub(r'^[\d\.\)\s]+', '', cleaned_line)
-            cleaned_line = cleaned_line.strip()
-
-            if current_section and cleaned_line:
-                # accept reasonable length lines
-                if len(cleaned_line) >= 6:
-                    treatments[current_section].append(cleaned_line)
-
-                # prevent huge list lengths
-                if len(treatments[current_section]) >= 6:
-                    # keep up to 6 suggestions per section
-                    continue
-
-        # If some sections empty, add sensible defaults (not too verbose)
-        if not treatments['organic']:
-            treatments['organic'] = ['Apply neem oil spray 5 ml per liter of water; repeat weekly for 3 applications.']
-        if not treatments['chemical']:
-            treatments['chemical'] = ['Use an appropriate fungicide/insecticide as recommended by local extension; follow label dosage and PPE instructions.']
-        if not treatments['prevention']:
-            treatments['prevention'] = ['Maintain field hygiene, crop rotation, and proper spacing to reduce disease spread.']
-
-        return treatments
-
-    def _default_treatments_empty(self):
-        return {
-            'organic': ['Apply neem oil 5 ml per liter of water.'],
-            'chemical': ['Consult local agricultural extension for recommended chemicals.'],
-            'prevention': ['Maintain sanitation and monitor plants regularly.']
-        }
-
-    def get_fallback_treatment(self, disease_name: str) -> Dict:
-        """Return rule-based fallback treatment suggestions."""
-        disease_lower = disease_name.lower()
-
+        
+        # Check for specific diseases
+        disease_lower = disease.lower()
+        
         if 'blight' in disease_lower:
-            return {
-                'organic': [
-                    'Remove infected leaves immediately and dispose (do not compost).',
-                    'Spray neem oil 5 ml per liter of water every 7 days.',
-                    'Apply baking soda spray (1 tbsp per gallon) as adjunct weekly.'
-                ],
-                'chemical': [
-                    'Apply Mancozeb or Chlorothalonil as per label instructions; wear PPE.',
-                    'Rotate active ingredients to avoid resistance.'
-                ],
-                'prevention': [
-                    'Ensure 18–24 inches spacing for good airflow.',
-                    'Water at the soil level; avoid wet foliage.',
-                    'Remove lower leaves that touch soil.'
-                ]
-            }
-
-        if 'mildew' in disease_lower or 'powdery' in disease_lower:
-            return {
-                'organic': [
-                    'Spray milk solution (1:9 milk:water) weekly.',
-                    'Apply sulfur dust early in the morning when dry.'
-                ],
-                'chemical': [
-                    'Apply Potassium bicarbonate or specific fungicide as per local recommendations.'
-                ],
-                'prevention': [
-                    'Avoid excess nitrogen fertilization and increase sunlight exposure.'
-                ]
-            }
-
-        if 'root rot' in disease_lower or 'rot' in disease_lower:
-            return {
-                'organic': [
-                    'Improve drainage and reduce watering frequency.',
-                    'Remove affected plants and avoid replanting in same spot.'
-                ],
-                'chemical': [
-                    'Use soil drench fungicide labeled for root rot if recommended by extension.'
-                ],
-                'prevention': [
-                    'Do not overwater; use raised beds if needed.'
-                ]
-            }
-
-        # generic fallback
-        return {
-            'organic': [
-                'Remove affected plant parts and destroy them.',
-                'Apply neem oil spray 5 ml per liter weekly.',
-                'Use compost tea as a foliar spray if available.'
-            ],
-            'chemical': [
-                'Apply appropriate fungicide/insecticide following label directions and PPE.'
-            ],
-            'prevention': [
-                'Maintain crop rotation, sanitation, and monitor crops regularly.'
+            treatment['organic'] = [
+                'Remove all infected leaves immediately',
+                'Apply neem oil spray (5ml/L water)',
+                'Use copper-based organic fungicide',
+                'Apply baking soda solution (1 tbsp/gallon)'
             ]
-        }
+            treatment['chemical'] = [
+                'Apply Mancozeb or Chlorothalonil fungicide',
+                'Use systemic fungicide for severe cases',
+                'Rotate fungicides to prevent resistance'
+            ]
+            treatment['immediate_actions'] = [
+                '🚨 Remove infected parts NOW',
+                '🔥 Burn or dispose infected material',
+                '💧 Avoid overhead watering'
+            ]
+            
+        elif 'mildew' in disease_lower:
+            treatment['organic'] = [
+                'Spray with milk solution (40% milk, 60% water)',
+                'Apply sulfur-based organic fungicide',
+                'Use potassium bicarbonate spray',
+                'Neem oil application every 7 days'
+            ]
+            treatment['chemical'] = [
+                'Apply trifloxystrobin or myclobutanil',
+                'Use preventive fungicide program',
+                'Systemic fungicides for severe infection'
+            ]
+            treatment['immediate_actions'] = [
+                '✂️ Prune affected areas',
+                '🌬️ Improve air circulation',
+                '☀️ Increase sunlight exposure'
+            ]
+            
+        elif 'spot' in disease_lower or 'bacterial' in disease_lower:
+            treatment['organic'] = [
+                'Copper hydroxide spray',
+                'Remove infected plant debris',
+                'Apply compost tea weekly',
+                'Use bacterial antagonists (Bacillus subtilis)'
+            ]
+            treatment['chemical'] = [
+                'Copper-based bactericides',
+                'Streptomycin (where permitted)',
+                'Apply protective sprays before rain'
+            ]
+            treatment['immediate_actions'] = [
+                '💧 Stop overhead irrigation',
+                '🧹 Sanitize all tools',
+                '🗑️ Remove infected plants'
+            ]
+            
+        elif 'virus' in disease_lower or 'curl' in disease_lower:
+            treatment['organic'] = [
+                'Remove and destroy infected plants',
+                'Control insect vectors (whiteflies, aphids)',
+                'Use reflective mulches',
+                'Apply neem oil for vector control'
+            ]
+            treatment['chemical'] = [
+                'No cure - focus on vector control',
+                'Insecticides for whitefly/aphid control',
+                'Imidacloprid for systemic protection'
+            ]
+            treatment['immediate_actions'] = [
+                '⚠️ Isolate infected plants',
+                '🐛 Control insect vectors immediately',
+                '🌱 Plant resistant varieties'
+            ]
+            
+        elif 'rust' in disease_lower:
+            treatment['organic'] = [
+                'Remove infected leaves promptly',
+                'Apply sulfur dust or spray',
+                'Use compost tea as foliar spray',
+                'Neem oil application'
+            ]
+            treatment['chemical'] = [
+                'Apply propiconazole or tebuconazole',
+                'Use preventive fungicide schedule',
+                'Rotate with different fungicide groups'
+            ]
+            treatment['immediate_actions'] = [
+                '🍂 Remove fallen leaves',
+                '💨 Ensure good air flow',
+                '💧 Water at soil level only'
+            ]
+        else:
+            # Generic treatment
+            treatment['organic'] = [
+                'Remove affected plant parts',
+                'Apply neem oil (5ml/L) every 5-7 days',
+                'Improve plant nutrition with compost',
+                'Use organic mulch to prevent splash'
+            ]
+            treatment['chemical'] = [
+                'Identify specific pathogen for targeted treatment',
+                'Apply broad-spectrum fungicide if fungal',
+                'Consult local agricultural extension'
+            ]
+            treatment['immediate_actions'] = [
+                '📸 Document symptoms',
+                '🔍 Monitor daily',
+                '👨‍🌾 Consult local expert'
+            ]
+        
+        # Common prevention for all diseases
+        treatment['prevention'] = [
+            'Use disease-resistant varieties',
+            'Practice crop rotation',
+            'Maintain proper plant spacing',
+            'Ensure good drainage',
+            'Regular field sanitation',
+            'Monitor weather conditions',
+            'Apply preventive organic sprays'
+        ]
+        
+        return treatment
 
-    def get_fallback_detection(self) -> Dict[str, Any]:
-        """Return a safe fallback detection result if models fail."""
-        return {
-            'disease': 'Unknown Disease',
-            'confidence': 0,
-            'provider': 'Fallback',
-            'error': 'No provider returned a reliable detection'
-        }
+    def detect_disease(self, image_path: str) -> Dict[str, Any]:
+        """Main method to detect disease"""
+        try:
+            # Step 1: Validate image
+            is_valid, confidence = self.validate_plant_image(image_path)
+            
+            if not is_valid or confidence < 30:
+                return {
+                    'error': 'Invalid image',
+                    'disease': 'Not a Plant',
+                    'confidence': 0,
+                    'suggestions': [
+                        'Please upload a clear photo of plant leaves or crops',
+                        'Ensure good lighting and focus',
+                        'Avoid blurry or non-plant images'
+                    ]
+                }
+            
+            # Step 2: Try primary detection with Gemini
+            result = None
+            
+            if self.providers_initialized.get('gemini'):
+                result = self.detect_with_gemini(image_path)
+            
+            # Step 3: If Gemini fails, use fallback
+            if not result:
+                logger.warning("Primary detection failed, using fallback")
+                result = self.get_fallback_detection(image_path)
+            
+            # Step 4: Add treatment recommendations
+            if result and result.get('disease'):
+                result['treatment'] = self.get_treatment_recommendations(
+                    result['disease'],
+                    result.get('pathogen', '')
+                )
+                
+                # Add alternatives if confidence is low
+                if result.get('confidence', 0) < 70:
+                    result['alternatives'] = [
+                        'Consider getting a second opinion',
+                        'Take multiple photos from different angles',
+                        'Consult with local agricultural expert'
+                    ]
+            
+            # Step 5: Ensure all required fields
+            if result:
+                result.setdefault('disease', 'Unknown')
+                result.setdefault('confidence', 50)
+                result.setdefault('provider', 'AgriSage AI')
+                result.setdefault('symptoms', [])
+                result.setdefault('severity', 'Unknown')
+            
+            return result or {
+                'disease': 'Detection Failed',
+                'confidence': 0,
+                'error': 'Unable to process image',
+                'suggestions': ['Please try again with a different image']
+            }
+            
+        except Exception as e:
+            logger.error(f"Detection error: {e}")
+            import traceback
+            traceback.print_exc()
+            
+            return {
+                'disease': 'Error',
+                'confidence': 0,
+                'error': str(e),
+                'suggestions': ['Please try again']
+            }
 
-    def detect_with_huggingface(self, image_path: str) -> Optional[Dict]:
-        """Detect using HuggingFace Inference API. Tries configured models in list."""
-        # Try current and next HF models until one returns a usable result
-        attempts = 0
-        max_attempts = len(self.hf_models)
-        start_idx = self.current_model_idx
-
-        while attempts < max_attempts:
-            try:
-                self.update_hf_model()  # ensure hf_api_url matches current idx
-                logger.info(f"Trying HF model: {self.current_hf_model}")
-
-                img = Image.open(image_path)
-                img = img.convert('RGB')
-                img = img.resize((224, 224), Image.Resampling.LANCZOS)
-
-                buffered = BytesIO()
-                img.save(buffered, format="JPEG", quality=90)
-                image_bytes = buffered.getvalue()
-
-                # Requests to HF Inference
-                response = requests.post(self.hf_api_url, headers=self.hf_headers, data=image_bytes, timeout=25)
-
-                if response.status_code == 200:
-                    try:
-                        results = response.json()
-                    except Exception:
-                        results = None
-
-                    # Many HF classification models return a list of dicts: [{"label": "...", "score": 0.9}, ...]
-                    if isinstance(results, list) and len(results) > 0 and isinstance(results[0], dict):
-                        # pick highest score label
-                        best = max(results, key=lambda r: r.get('score', 0))
-                        label = best.get('label') or best.get('name') or str(best)
-                        score = float(best.get('score', 0)) * 100
-                        disease = self.extract_disease_from_text(label)
-                        return {
-                            'disease': disease,
-                            'confidence': round(score, 2),
-                            'provider': f'HuggingFace:{self.current_hf_model}',
-                            'raw': results
-                        }
-
-                    # Some models may return {"error": "..."} or textual output
-                    if isinstance(results, dict):
-                        # If results contains "error", move to next model
-                        if 'error' in results:
-                            logger.warning(f'HF model {self.current_hf_model} returned error: {results.get("error")}')
-                        else:
-                            # try to find probable label keys
-                            if 'label' in results:
-                                disease = self.extract_disease_from_text(results.get('label'))
-                                return {
-                                    'disease': disease,
-                                    'confidence': round(float(results.get('score', 0)) * 100, 2) if results.get('score') else 60,
-                                    'provider': f'HuggingFace:{self.current_hf_model}',
-                                    'raw': results
-                                }
-
-                    # If the model returns plain text
-                    text = response.text.strip()
-                    if text:
-                        disease = self.extract_disease_from_text(text)
-                        # use a medium confidence since HF text responses are unpredictable
-                        return {
-                            'disease': disease,
-                            'confidence': 70,
-                            'provider': f'HuggingFace:{self.current_hf_model}',
-                            'raw': text
-                        }
-
-                else:
-                    logger.warning(f"HuggingFace model {self.current_hf_model} returned status {response.status_code}: {response.text}")
-
-            except Exception as e:
-                logger.error(f"HuggingFace detection error for {self.current_hf_model}: {e}", exc_info=True)
-
-            # rotate to next model and retry
-            attempts += 1
-            self.current_model_idx = (self.current_model_idx + 1) % len(self.hf_models)
-            time.sleep(0.5)
-
-        # If all HF models fail, return None to let the caller choose fallback
-        return None
+# Create global instance
+disease_detector = DiseaseDetector()

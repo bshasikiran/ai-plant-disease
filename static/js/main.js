@@ -187,26 +187,69 @@ function displayResults(data) {
 }
 
 // Text to Speech
+// Text to Speech with multilingual support
 async function speakResults() {
     if (!currentResults) return;
     
-    let text = `Disease detected: ${currentResults.disease}. `;
-    text += `Confidence level: ${currentResults.confidence} percent. `;
+    const language = languageSelect.value;
+    let text = '';
     
-    if (currentResults.treatment) {
-        if (currentResults.treatment.organic && currentResults.treatment.organic.length > 0) {
-            text += `Organic treatment: ${currentResults.treatment.organic[0]}. `;
+    // Prepare text based on language
+    if (language === 'te') {
+        // Telugu text preparation
+        text = `గుర్తించిన వ్యాధి: ${currentResults.disease}. `;
+        text += `నమ్మకం స్థాయి: ${currentResults.confidence} శాతం. `;
+        
+        if (currentResults.treatment) {
+            if (currentResults.treatment.organic && currentResults.treatment.organic.length > 0) {
+                text += `సేంద్రీయ చికిత్స: ${currentResults.treatment.organic[0]}. `;
+            }
+            if (currentResults.treatment.chemical && currentResults.treatment.chemical.length > 0) {
+                text += `రసాయన చికిత్స: ${currentResults.treatment.chemical[0]}. `;
+            }
+            if (currentResults.treatment.prevention && currentResults.treatment.prevention.length > 0) {
+                text += `నివారణ చర్యలు: ${currentResults.treatment.prevention[0]}. `;
+            }
         }
-        if (currentResults.treatment.chemical && currentResults.treatment.chemical.length > 0) {
-            text += `Chemical treatment: ${currentResults.treatment.chemical[0]}. `;
+    } else if (language === 'hi') {
+        // Hindi text preparation
+        text = `पहचानी गई बीमारी: ${currentResults.disease}. `;
+        text += `विश्वास स्तर: ${currentResults.confidence} प्रतिशत. `;
+        
+        if (currentResults.treatment) {
+            if (currentResults.treatment.organic && currentResults.treatment.organic.length > 0) {
+                text += `जैविक उपचार: ${currentResults.treatment.organic[0]}. `;
+            }
+            if (currentResults.treatment.chemical && currentResults.treatment.chemical.length > 0) {
+                text += `रासायनिक उपचार: ${currentResults.treatment.chemical[0]}. `;
+            }
+            if (currentResults.treatment.prevention && currentResults.treatment.prevention.length > 0) {
+                text += `रोकथाम: ${currentResults.treatment.prevention[0]}. `;
+            }
         }
-        if (currentResults.treatment.prevention && currentResults.treatment.prevention.length > 0) {
-            text += `Prevention: ${currentResults.treatment.prevention[0]}. `;
+    } else {
+        // English text preparation
+        text = `Disease detected: ${currentResults.disease}. `;
+        text += `Confidence level: ${currentResults.confidence} percent. `;
+        
+        if (currentResults.treatment) {
+            if (currentResults.treatment.organic && currentResults.treatment.organic.length > 0) {
+                text += `Organic treatment: ${currentResults.treatment.organic[0]}. `;
+            }
+            if (currentResults.treatment.chemical && currentResults.treatment.chemical.length > 0) {
+                text += `Chemical treatment: ${currentResults.treatment.chemical[0]}. `;
+            }
+            if (currentResults.treatment.prevention && currentResults.treatment.prevention.length > 0) {
+                text += `Prevention: ${currentResults.treatment.prevention[0]}. `;
+            }
         }
     }
     
+    // Remove special characters that might cause issues
+    text = text.replace(/[🌱🔬💊✓•📊🦠⚗️]/g, '');
+    
     speakBtn.disabled = true;
-    speakBtn.textContent = '🔊 Generating Audio...';
+    speakBtn.innerHTML = '<span class="btn-icon">🔊</span> Generating Audio...';
     
     try {
         const response = await fetch('/generate_audio', {
@@ -216,21 +259,43 @@ async function speakResults() {
             },
             body: JSON.stringify({
                 text: text,
-                language: languageSelect.value
+                language: language
             })
         });
         
         const data = await response.json();
         
         if (response.ok && data.audio_url) {
+            // Clear any previous audio
+            audioPlayer.pause();
+            audioPlayer.currentTime = 0;
+            
+            // Set new audio source and play
             audioPlayer.src = data.audio_url;
-            audioPlayer.play();
+            
+            // Add event listeners for better control
+            audioPlayer.onloadeddata = function() {
+                audioPlayer.play().catch(e => {
+                    console.error('Audio play error:', e);
+                    alert('Audio playback failed. Please try again.');
+                });
+            };
+            
+            audioPlayer.onerror = function() {
+                console.error('Audio loading error');
+                alert('Failed to load audio. Please try again.');
+            };
+            
+            // Show message if fallback was used
+            if (data.fallback) {
+                console.info(data.message);
+            }
         } else {
-            alert('Failed to generate audio');
+            alert('Failed to generate audio. Please try again.');
         }
     } catch (error) {
         console.error('Error:', error);
-        alert('Failed to generate audio');
+        alert('Failed to generate audio. Please try again.');
     } finally {
         speakBtn.disabled = false;
         speakBtn.innerHTML = '<span class="btn-icon">🔊</span> Read Aloud';

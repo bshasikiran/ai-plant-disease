@@ -309,7 +309,7 @@ def chat():
 
 @app.route('/generate_audio', methods=['POST'])
 def generate_audio():
-    """Generate audio for text-to-speech"""
+    """Generate audio for text-to-speech with multilingual support"""
     try:
         data = request.json
         text = data.get('text', '')
@@ -318,22 +318,106 @@ def generate_audio():
         if not text:
             return jsonify({'error': 'No text provided'}), 400
         
-        # Generate audio
-        tts_lang = 'te' if language == 'te' else 'en'
-        tts = gTTS(text=text, lang=tts_lang, slow=False)
+        # Clean the text for TTS
+        # Remove special characters that might cause issues
+        text = text.replace('🌱', '').replace('🔬', '').replace('💊', '')
+        text = text.replace('✓', 'correct').replace('•', ',')
+        text = text.replace('📊', '').replace('🦠', '').replace('⚗️', '')
         
-        # Save to temporary file
-        audio_file = tempfile.NamedTemporaryFile(delete=False, suffix='.mp3', dir='static/audio')
-        tts.save(audio_file.name)
+        # Language mapping for gTTS
+        language_map = {
+            'en': 'en',        # English
+            'te': 'te',        # Telugu
+            'hi': 'hi',        # Hindi
+            'ta': 'ta',        # Tamil
+            'kn': 'kn',        # Kannada
+            'ml': 'ml',        # Malayalam
+            'mr': 'mr',        # Marathi
+            'gu': 'gu',        # Gujarati
+            'bn': 'bn',        # Bengali
+            'pa': 'pa',        # Punjabi
+            'es': 'es',        # Spanish
+            'fr': 'fr',        # French
+            'de': 'de',        # German
+            'zh': 'zh-CN',    # Chinese
+            'ar': 'ar',        # Arabic
+            'pt': 'pt',        # Portuguese
+            'ru': 'ru',        # Russian
+            'ja': 'ja',        # Japanese
+            'ko': 'ko',        # Korean
+        }
         
-        # Return the audio file path
-        audio_url = f'/static/audio/{os.path.basename(audio_file.name)}'
+        # Get the correct language code
+        tts_lang = language_map.get(language, 'en')
         
-        return jsonify({'audio_url': audio_url}), 200
+        logger.info(f"Generating audio in language: {tts_lang} for text length: {len(text)}")
         
+        # Generate unique filename
+        import uuid
+        filename = f"audio_{uuid.uuid4().hex}_{language}.mp3"
+        filepath = os.path.join('static', 'audio', filename)
+        
+        # Ensure audio directory exists
+        os.makedirs(os.path.dirname(filepath), exist_ok=True)
+        
+        try:
+            # Generate audio using gTTS
+            from gtts import gTTS
+            
+            # Create gTTS object with specific language
+            tts = gTTS(text=text, lang=tts_lang, slow=False)
+            
+            # Save the audio file
+            tts.save(filepath)
+            
+            # Verify file was created
+            if os.path.exists(filepath):
+                audio_url = f'/static/audio/{filename}'
+                logger.info(f"Audio generated successfully: {audio_url}")
+                return jsonify({'audio_url': audio_url, 'language': tts_lang}), 200
+            else:
+                raise Exception("Audio file was not created")
+                
+        except Exception as tts_error:
+            logger.error(f"gTTS error for language {tts_lang}: {str(tts_error)}")
+            
+            # Fallback: Try with English if Telugu fails
+            if tts_lang == 'te':
+                logger.info("Telugu TTS failed, trying transliteration fallback...")
+                
+                # Transliterate Telugu text to English phonetics
+                from googletrans import Translator
+                translator = Translator()
+                
+                try:
+                    # Translate Telugu to English
+                    translated = translator.translate(text, src='te', dest='en')
+                    fallback_text = translated.text if translated else text
+                    
+                    # Generate English audio
+                    tts_fallback = gTTS(text=fallback_text, lang='en', slow=True)
+                    tts_fallback.save(filepath)
+                    
+                    if os.path.exists(filepath):
+                        audio_url = f'/static/audio/{filename}'
+                        return jsonify({
+                            'audio_url': audio_url, 
+                            'language': 'en',
+                            'fallback': True,
+                            'message': 'Telugu audio not available, using English translation'
+                        }), 200
+                        
+                except Exception as fallback_error:
+                    logger.error(f"Fallback translation error: {fallback_error}")
+            
+            # If all fails, return error
+            raise tts_error
+            
     except Exception as e:
         logger.error(f"Error in generate_audio: {str(e)}")
-        return jsonify({'error': str(e)}), 500
+        import traceback
+        traceback.print_exc()
+        return jsonify({'error': f'Audio generation failed: {str(e)}'}), 500
 
 @app.route('/generate_report', methods=['POST'])
 def generate_report():
