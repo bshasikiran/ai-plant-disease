@@ -156,7 +156,7 @@ Built with ❤️ for farmers worldwide 🌾
 
 🔗 [Website](https://ai-plant-disease.onrender.com)
 💻 [GitHub](https://github.com/bshasikiran/ai-plant-disease)
-📧 Email: `your-email@example.com`
+📧 Email: `bshasikiran@example.com`
 
 ---
 
@@ -169,3 +169,4 @@ Built with ❤️ for farmers worldwide 🌾
 ```
 
 ---
+
